@@ -1,0 +1,63 @@
+# ---- Environment & Secrets ----
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ---- Node ----
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---- Next.js ----
+.next/
+out/
+
+# ---- Build outputs ----
+build/
+coverage/
+
+# ---- Docker ----
+docker-compose.override.yml
+
+# ---- Terraform ----
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfplan
+
+# ---- n8n ----
+# Do NOT ignore apps/n8n-workflows/*.json — those are version-controlled
+.n8n/
+
+# ---- Logs ----
+*.log
+logs/
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- IDE ----
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ---- Misc ----
+*.tmp
+.cache/
