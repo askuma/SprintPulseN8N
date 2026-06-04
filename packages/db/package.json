@@ -1,0 +1,35 @@
+{
+  "name": "@sprintpulse/db",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "migrate": "drizzle-kit push:pg",
+    "generate": "drizzle-kit generate:pg",
+    "studio": "drizzle-kit studio",
+    "seed": "tsx src/seeds/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.31.0",
+    "postgres": "^3.4.4",
+    "@sprintpulse/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.22.0",
+    "tsup": "^8.1.0",
+    "tsx": "^4.15.0",
+    "typescript": "^5.4.5",
+    "@types/node": "^20.14.0"
+  }
+}

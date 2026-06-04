@@ -1,0 +1,34 @@
+{
+  "name": "sprintpulse",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SprintPulse — AI-Powered Weekly Report Automation (Architecture B: n8n Integration Layer)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:n8n": "concurrently \"pnpm --filter @sprintpulse/web dev\" \"pnpm --filter @sprintpulse/api-gateway dev\" \"pnpm --filter @sprintpulse/ai-service dev\" \"pnpm --filter @sprintpulse/delivery-service dev\"",
+    "build": "pnpm --filter @sprintpulse/shared-types build && pnpm --filter @sprintpulse/db build && pnpm --recursive --filter '!@sprintpulse/shared-types' --filter '!@sprintpulse/db' build",
+    "db:migrate": "pnpm --filter @sprintpulse/db migrate",
+    "db:seed": "pnpm --filter @sprintpulse/db seed",
+    "db:studio": "pnpm --filter @sprintpulse/db studio",
+    "test": "pnpm --recursive test",
+    "lint": "pnpm --recursive lint",
+    "typecheck": "pnpm --recursive typecheck",
+    "clean": "pnpm --recursive clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.5",
+    "@types/node": "^20.14.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.1.0"
+}

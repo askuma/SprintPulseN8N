@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --sp-blue: #1e40af;
+  --sp-blue-light: #dbeafe;
+  --sp-green: #16a34a;
+  --sp-red: #dc2626;
+  --sp-amber: #d97706;
+}

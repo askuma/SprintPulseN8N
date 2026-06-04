@@ -1,0 +1,43 @@
+{
+  "name": "@sprintpulse/api-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsup src/index.ts --format cjs --clean --no-dts",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sprintpulse/db": "workspace:*",
+    "@sprintpulse/shared-types": "workspace:*",
+    "express": "^4.19.2",
+    "express-async-errors": "^3.1.1",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.3.1",
+    "jsonwebtoken": "^9.0.2",
+    "jwks-rsa": "^3.1.0",
+    "zod": "^3.23.8",
+    "nanoid": "^5.0.7",
+    "axios": "^1.7.2",
+    "pino": "^9.2.0",
+    "pino-http": "^10.1.0",
+    "@aws-sdk/client-kms": "^3.600.0",
+    "@aws-sdk/client-secrets-manager": "^3.600.0",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.17",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^20.14.0",
+    "tsup": "^8.1.0",
+    "tsx": "^4.15.0",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  }
+}
