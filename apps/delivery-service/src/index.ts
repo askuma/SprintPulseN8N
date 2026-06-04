@@ -91,6 +91,17 @@ app.post("/deliver", async (req, res) => {
   res.json({ delivery_results: deliveryResults });
 });
 
+app.get("/", (_req, res) => {
+  res.json({
+    service: "SprintPulse Delivery Service",
+    version: "1.0.0",
+    endpoints: {
+      deliver: "POST /deliver  { report_id, workspace_id, channels, slack_channel_id?, email_recipients? }",
+      health: "GET /health",
+    },
+  });
+});
+
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "delivery-service", timestamp: new Date().toISOString() });
 });

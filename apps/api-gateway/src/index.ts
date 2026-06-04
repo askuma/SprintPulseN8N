@@ -57,6 +57,22 @@ app.use("/webhooks", webhooksRouter);
 app.use("/internal/sync", internalSyncRouter);
 app.use("/internal/workspaces", internalWorkspacesRouter);
 
+// --- Root info ---
+app.get("/", (_req, res) => {
+  res.json({
+    service: "SprintPulse API Gateway",
+    version: "1.0.0",
+    docs: "See API_DOCUMENTATION.md",
+    endpoints: {
+      health: "GET /health",
+      reports: "GET|POST /v1/reports",
+      integrations: "GET|POST /v1/integrations",
+      webhooks: "POST /webhooks/:provider",
+      internal: "POST /internal/sync/*  (X-Internal-API-Key required)",
+    },
+  });
+});
+
 // --- Health Check ---
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "api-gateway", timestamp: new Date().toISOString() });

@@ -1,6 +1,6 @@
--- SprintPulse database init: create n8n schema on same RDS instance
-CREATE SCHEMA IF NOT EXISTS n8n_schema;
-CREATE USER n8n WITH PASSWORD 'n8n_password';
-GRANT ALL PRIVILEGES ON SCHEMA n8n_schema TO n8n;
+-- SprintPulse database init: run by postgres on first container start
+-- Creates the n8n user and dedicated n8n database
 
--- Enum types are created by Drizzle migrations; this file handles infra-level setup only
+CREATE USER n8n WITH PASSWORD 'n8n_password';
+CREATE DATABASE n8n OWNER n8n;
+GRANT ALL PRIVILEGES ON DATABASE n8n TO n8n;

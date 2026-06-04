@@ -1,7 +1,7 @@
 {
   "name": "Workflow 1 — Jira Sprint Sync",
   "description": "Polls Jira every 15 minutes for active sprint data. Normalises ticket statuses and burndown, then posts to /internal/sync/jira.",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "active": true,
   "nodes": [
     {
@@ -13,8 +13,7 @@
       "parameters": {
         "rule": {
           "interval": [{ "field": "minutes", "minutesInterval": 15 }]
-        },
-        "timezone": "={{ $env.WORKSPACE_TIMEZONE || 'UTC' }}"
+        }
       }
     },
     {
@@ -36,62 +35,84 @@
       }
     },
     {
-      "id": "node-3",
-      "name": "Split By Workspace",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [680, 300],
+      "id": "node-2b",
+      "name": "Extract Workspaces",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [660, 300],
       "parameters": {
-        "batchSize": 1,
-        "options": {}
+        "fieldToSplitOut": "data",
+        "include": "noOtherFields"
       }
     },
     {
       "id": "node-4",
       "name": "Get Jira Active Sprints",
-      "type": "n8n-nodes-base.jira",
-      "typeVersion": 1,
-      "position": [900, 300],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 300],
       "credentials": {
-        "jiraApi": { "name": "Jira OAuth2 — SprintPulse" }
+        "httpBasicAuth": { "name": "Jira Basic Auth — SprintPulse" }
       },
       "parameters": {
-        "resource": "sprint",
-        "operation": "getAll",
-        "boardId": "={{ $json.jira_board_id }}",
-        "additionalFields": {
-          "state": "active"
-        }
+        "method": "GET",
+        "url": "={{ $json.jira_base_url }}/rest/agile/1.0/board/{{ $json.jira_board_id }}/sprint",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "state", "value": "active" }
+          ]
+        },
+        "options": { "timeout": 10000 }
       }
     },
     {
-      "id": "node-5",
-      "name": "Split By Sprint",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [1120, 300],
+      "id": "node-4c",
+      "name": "Enrich Sprints",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300],
       "parameters": {
-        "batchSize": 1,
-        "options": {}
+        "mode": "runOnceForEachItem",
+        "jsCode": "const workspace = $('Extract Workspaces').item.json;\nconst sprints = $json.values ?? [];\nconst enriched = sprints.map(s => ({\n  ...s,\n  workspace_id: workspace.id,\n  jira_base_url: workspace.jira_base_url\n}));\nreturn { values: enriched };"
+      }
+    },
+    {
+      "id": "node-4b",
+      "name": "Extract Active Sprints",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [1300, 300],
+      "parameters": {
+        "fieldToSplitOut": "values",
+        "include": "noOtherFields"
       }
     },
     {
       "id": "node-6",
       "name": "Get Sprint Issues",
-      "type": "n8n-nodes-base.jira",
-      "typeVersion": 1,
-      "position": [1340, 300],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 300],
       "credentials": {
-        "jiraApi": { "name": "Jira OAuth2 — SprintPulse" }
+        "httpBasicAuth": { "name": "Jira Basic Auth — SprintPulse" }
       },
       "parameters": {
-        "resource": "issue",
-        "operation": "getAll",
-        "jql": "sprint = {{ $json.id }} AND updated >= -15m",
-        "fields": ["summary", "status", "assignee", "story_points", "updated", "priority", "labels"],
-        "additionalFields": {
-          "maxResults": 200
-        }
+        "method": "GET",
+        "url": "={{ $json.jira_base_url }}/rest/api/3/search/jql",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "jql", "value": "={{ 'sprint = ' + $json.id + ' AND updated >= -15m' }}" },
+            { "name": "fields", "value": "summary,status,assignee,customfield_10016,updated,priority,labels" },
+            { "name": "maxResults", "value": "200" }
+          ]
+        },
+        "options": { "timeout": 15000 }
       }
     },
     {
@@ -99,10 +120,10 @@
       "name": "Normalise Sprint Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1560, 300],
+      "position": [1700, 300],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const sprint = $('Get Jira Active Sprints').item.json;\nconst issues = $input.all().map(i => i.json);\nconst workspaceId = $('Split By Workspace').item.json.id;\n\nconst STATUS_MAP = {\n  'To Do': 'todo',\n  'In Progress': 'in_progress',\n  'Blocked': 'blocked',\n  'Done': 'done',\n  'Cancelled': 'cancelled'\n};\n\nfunction normaliseStatus(statusCategory) {\n  if (statusCategory === 'To Do' || statusCategory === 'new') return 'todo';\n  if (statusCategory === 'In Progress' || statusCategory === 'indeterminate') return 'in_progress';\n  if (statusCategory === 'Done' || statusCategory === 'complete') return 'done';\n  return 'in_progress';\n}\n\nconst normalised = issues.map(issue => ({\n  id: issue.id,\n  key: issue.key,\n  summary: issue.fields.summary,\n  status: normaliseStatus(issue.fields.status?.statusCategory?.key),\n  assignee: issue.fields.assignee?.displayName ?? null,\n  story_points: issue.fields.story_points ?? issue.fields.customfield_10016 ?? null,\n  updated_at: issue.fields.updated,\n  blocked_days: issue.fields.status?.name?.toLowerCase() === 'blocked'\n    ? Math.floor((Date.now() - new Date(issue.fields.updated).getTime()) / 86400000)\n    : 0,\n  labels: issue.fields.labels ?? [],\n  priority: issue.fields.priority?.name ?? null\n}));\n\nconst completed = normalised.filter(i => i.status === 'done');\nconst inProgress = normalised.filter(i => i.status === 'in_progress');\nconst blocked = normalised.filter(i => i.status === 'blocked');\n\nconst totalSP = normalised.reduce((s, i) => s + (i.story_points ?? 0), 0);\nconst completedSP = completed.reduce((s, i) => s + (i.story_points ?? 0), 0);\nconst burndown = totalSP > 0 ? Math.round((completedSP / totalSP) * 10000) / 100 : 0;\n\nreturn {\n  sprint_id: String(sprint.id),\n  sprint_name: sprint.name,\n  board_id: String(sprint.originBoardId),\n  workspace_id: workspaceId,\n  start_date: new Date(sprint.startDate).toISOString(),\n  end_date: new Date(sprint.endDate).toISOString(),\n  state: sprint.state,\n  total_story_points: totalSP,\n  completed_story_points: completedSP,\n  burndown_percent: burndown,\n  tickets_completed: completed,\n  tickets_in_progress: inProgress,\n  tickets_blocked: blocked,\n  synced_at: new Date().toISOString()\n};"
+        "jsCode": "const sprint = $('Extract Active Sprints').item.json;\nconst workspaceId = sprint.workspace_id;\nconst issues = $json.issues ?? [];\n\nfunction normaliseStatus(key) {\n  if (key === 'new') return 'todo';\n  if (key === 'indeterminate') return 'in_progress';\n  if (key === 'complete') return 'done';\n  return 'in_progress';\n}\n\nconst normalised = issues.map(issue => ({\n  id: issue.id,\n  key: issue.key,\n  summary: issue.fields.summary,\n  status: normaliseStatus(issue.fields.status?.statusCategory?.key),\n  assignee: issue.fields.assignee?.displayName ?? null,\n  story_points: issue.fields.customfield_10016 ?? null,\n  updated_at: new Date(issue.fields.updated).toISOString(),\n  blocked_days: issue.fields.status?.name?.toLowerCase() === 'blocked'\n    ? Math.floor((Date.now() - new Date(issue.fields.updated).getTime()) / 86400000)\n    : 0,\n  labels: issue.fields.labels ?? [],\n  priority: issue.fields.priority?.name ?? null\n}));\n\nconst completed = normalised.filter(i => i.status === 'done');\nconst inProgress = normalised.filter(i => i.status === 'in_progress');\nconst blocked = normalised.filter(i => i.status === 'blocked');\n\nconst totalSP = normalised.reduce((s, i) => s + (i.story_points ?? 0), 0);\nconst completedSP = completed.reduce((s, i) => s + (i.story_points ?? 0), 0);\nconst burndown = totalSP > 0 ? Math.round((completedSP / totalSP) * 10000) / 100 : 0;\n\nreturn {\n  sprint_id: String(sprint.id),\n  sprint_name: sprint.name,\n  board_id: String(sprint.originBoardId),\n  workspace_id: workspaceId,\n  start_date: new Date(sprint.startDate).toISOString(),\n  end_date: new Date(sprint.endDate).toISOString(),\n  state: sprint.state,\n  total_story_points: totalSP,\n  completed_story_points: completedSP,\n  burndown_percent: burndown,\n  tickets_completed: completed,\n  tickets_in_progress: inProgress,\n  tickets_blocked: blocked,\n  synced_at: new Date().toISOString()\n};"
       }
     },
     {
@@ -110,20 +131,20 @@
       "name": "POST to Gateway",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1780, 300],
+      "position": [1900, 300],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.GATEWAY_INTERNAL_URL }}/internal/sync/jira",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "X-Internal-API-Key", "value": "={{ $env.INTERNAL_API_KEY }}" },
-            { "name": "Content-Type", "value": "application/json" }
+            { "name": "X-Internal-API-Key", "value": "={{ $env.INTERNAL_API_KEY }}" }
           ]
         },
         "sendBody": true,
         "contentType": "json",
-        "body": "={{ $json }}",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
         "options": { "timeout": 15000 }
       }
     },
@@ -132,12 +153,12 @@
       "name": "Check Response",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [2000, 300],
+      "position": [2100, 300],
       "parameters": {
         "conditions": {
           "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
           "conditions": [
-            { "leftValue": "={{ $json.statusCode }}", "rightValue": 202, "operator": { "type": "number", "operation": "equals" } }
+            { "leftValue": "={{ $json.status }}", "rightValue": "accepted", "operator": { "type": "string", "operation": "equals" } }
           ],
           "combinator": "and"
         }
@@ -148,7 +169,7 @@
       "name": "Alert on Error",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.2,
-      "position": [2220, 460],
+      "position": [2300, 460],
       "credentials": {
         "slackApi": { "name": "Slack Bot — SprintPulse Ops" }
       },
@@ -156,28 +177,46 @@
         "resource": "message",
         "operation": "post",
         "channel": "#ops-alerts",
-        "text": "🚨 *Workflow 1 — Jira Sprint Sync FAILED*\nWorkspace: {{ $('Split By Workspace').item.json.id }}\nError: {{ $json.message ?? JSON.stringify($json) }}\nTimestamp: {{ new Date().toISOString() }}"
+        "text": "={{ '🚨 *Workflow 1 — Jira Sprint Sync FAILED*\\nSprint: ' + ($('Extract Active Sprints').item.json.name ?? 'unknown') + '\\nError: ' + ($json.message ?? JSON.stringify($json)) + '\\nTimestamp: ' + new Date().toISOString() }}"
       }
     }
   ],
   "connections": {
-    "Schedule Trigger": { "main": [[{ "node": "Get Active Workspaces", "type": "main", "index": 0 }]] },
-    "Get Active Workspaces": { "main": [[{ "node": "Split By Workspace", "type": "main", "index": 0 }]] },
-    "Split By Workspace": { "main": [[{ "node": "Get Jira Active Sprints", "type": "main", "index": 0 }]] },
-    "Get Jira Active Sprints": { "main": [[{ "node": "Split By Sprint", "type": "main", "index": 0 }]] },
-    "Split By Sprint": { "main": [[{ "node": "Get Sprint Issues", "type": "main", "index": 0 }]] },
-    "Get Sprint Issues": { "main": [[{ "node": "Normalise Sprint Data", "type": "main", "index": 0 }]] },
-    "Normalise Sprint Data": { "main": [[{ "node": "POST to Gateway", "type": "main", "index": 0 }]] },
-    "POST to Gateway": { "main": [[{ "node": "Check Response", "type": "main", "index": 0 }]] },
+    "Schedule Trigger": {
+      "main": [[{ "node": "Get Active Workspaces", "type": "main", "index": 0 }]]
+    },
+    "Get Active Workspaces": {
+      "main": [[{ "node": "Extract Workspaces", "type": "main", "index": 0 }]]
+    },
+    "Extract Workspaces": {
+      "main": [[{ "node": "Get Jira Active Sprints", "type": "main", "index": 0 }]]
+    },
+    "Get Jira Active Sprints": {
+      "main": [[{ "node": "Enrich Sprints", "type": "main", "index": 0 }]]
+    },
+    "Enrich Sprints": {
+      "main": [[{ "node": "Extract Active Sprints", "type": "main", "index": 0 }]]
+    },
+    "Extract Active Sprints": {
+      "main": [[{ "node": "Get Sprint Issues", "type": "main", "index": 0 }]]
+    },
+    "Get Sprint Issues": {
+      "main": [[{ "node": "Normalise Sprint Data", "type": "main", "index": 0 }]]
+    },
+    "Normalise Sprint Data": {
+      "main": [[{ "node": "POST to Gateway", "type": "main", "index": 0 }]]
+    },
+    "POST to Gateway": {
+      "main": [[{ "node": "Check Response", "type": "main", "index": 0 }]]
+    },
     "Check Response": {
       "main": [
-        [{ "node": "Split By Sprint", "type": "main", "index": 0 }],
+        [],
         [{ "node": "Alert on Error", "type": "main", "index": 0 }]
       ]
     }
   },
   "settings": {
-    "executionOrder": "v1",
-    "errorWorkflow": "Workflow Error Handler"
+    "executionOrder": "v1"
   }
 }

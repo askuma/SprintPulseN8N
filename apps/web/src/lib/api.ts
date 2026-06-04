@@ -23,11 +23,12 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Refresh on 401
+// Refresh on 401 — skip redirect in local dev (no Auth0 configured)
 api.interceptors.response.use(
   r => r,
   async (error) => {
-    if (error.response?.status === 401 && !error.config._retry) {
+    const isDev = process.env.NODE_ENV === "development";
+    if (error.response?.status === 401 && !error.config._retry && !isDev) {
       error.config._retry = true;
       try {
         const refreshToken = localStorage.getItem("sp_refresh_token");

@@ -35,9 +35,12 @@ services:
     ports:
       - "5678:5678"
     environment:
-      - N8N_BASIC_AUTH_ACTIVE=true
-      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
-      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-changeme}
+      # Owner account — pre-seeds the first-run wizard so it's skipped on fresh containers
+      - N8N_USER_MANAGEMENT_ENABLED=true
+      - N8N_OWNER_EMAIL=${N8N_OWNER_EMAIL:-admin@sprintpulse.local}
+      - N8N_OWNER_PASSWORD=${N8N_OWNER_PASSWORD:-Sprintpulse_admin1}
+      - N8N_OWNER_FIRST_NAME=Admin
+      - N8N_OWNER_LAST_NAME=SprintPulse
       - N8N_HOST=${N8N_HOST:-localhost}
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
@@ -52,6 +55,13 @@ services:
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
       - N8N_LOG_LEVEL=info
       - N8N_METRICS=true
+      # Allow workflows to read $env.* variables
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      # Expose app credentials to n8n workflows
+      - GATEWAY_INTERNAL_URL=http://host.docker.internal:3001
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - n8n_data:/home/node/.n8n
     depends_on:

@@ -33,6 +33,8 @@ internalWorkspacesRouter.get("/active", async (_req, res) => {
   const activeIntegrations = await db.select({
     workspace_id: integrations.workspace_id,
     type: integrations.type,
+    external_id: integrations.external_id,
+    metadata: integrations.metadata,
   }).from(integrations)
     .where(and(
       inArray(integrations.workspace_id, workspaceIds),
@@ -46,12 +48,20 @@ internalWorkspacesRouter.get("/active", async (_req, res) => {
       connectedWorkspaceIds.has(w.id) &&
       w.reports_generated_this_month < w.monthly_report_quota
     )
-    .map(w => ({
-      ...w,
-      connected_integrations: activeIntegrations
-        .filter(i => i.workspace_id === w.id)
-        .map(i => i.type),
-    }));
+    .map(w => {
+      const wIntegrations = activeIntegrations.filter(i => i.workspace_id === w.id);
+      const jira = wIntegrations.find(i => i.type === "jira");
+      const github = wIntegrations.filter(i => i.type === "github");
+      const slack = wIntegrations.find(i => i.type === "slack");
+      return {
+        ...w,
+        connected_integrations: wIntegrations.map(i => i.type),
+        jira_board_id: jira?.external_id ?? null,
+        jira_base_url: (jira?.metadata as Record<string, string> | null)?.base_url ?? null,
+        github_repos: github.map(i => i.external_id).filter(Boolean),
+        slack_team_id: (slack?.metadata as Record<string, string> | null)?.team_id ?? null,
+      };
+    });
 
   res.json({ data: result });
 });
