@@ -1,11 +1,9 @@
 """Assembles the sprint context document from PostgreSQL for a given workspace + sprint."""
 import os
-from datetime import datetime, timedelta
 import asyncpg
 from models.report import (
     ReportContext, SprintContext, GitHubContext, BlockerContext,
     SlackSignalsContext, CompletedTicket, InProgressTicket, BlockedTicket,
-    PreviousActionItem,
 )
 
 
@@ -23,14 +21,29 @@ async def build_context(workspace_id: str, sprint_id: str) -> ReportContext:
             raise ValueError(f"No sprint data found for sprint_id={sprint_id}")
 
         import json
+
+        def decode_jsonb(value):
+            if value is None:
+                return []
+            if isinstance(value, list):
+                return value
+            if isinstance(value, str):
+                return json.loads(value) if value.strip() not in ("", "null") else []
+            return []
+
+        def safe_ticket(model, t):
+            if isinstance(t, dict):
+                return model(**{k: v for k, v in t.items() if k in model.model_fields})
+            return None
+
         tickets_completed = [
-            CompletedTicket(**t) for t in json.loads(sprint_row["tickets_completed"] or "[]")
+            r for r in (safe_ticket(CompletedTicket, t) for t in decode_jsonb(sprint_row["tickets_completed"])) if r
         ]
         tickets_in_progress = [
-            InProgressTicket(**t) for t in json.loads(sprint_row["tickets_in_progress"] or "[]")
+            r for r in (safe_ticket(InProgressTicket, t) for t in decode_jsonb(sprint_row["tickets_in_progress"])) if r
         ]
         tickets_blocked = [
-            BlockedTicket(**t) for t in json.loads(sprint_row["tickets_blocked"] or "[]")
+            r for r in (safe_ticket(BlockedTicket, t) for t in decode_jsonb(sprint_row["tickets_blocked"])) if r
         ]
 
         sprint = SprintContext(

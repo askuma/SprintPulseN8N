@@ -176,7 +176,12 @@
       "parameters": {
         "resource": "message",
         "operation": "post",
-        "channel": "#ops-alerts",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $env.SLACK_OPS_CHANNEL_ID }}",
+          "mode": "id"
+        },
         "text": "={{ '🚨 *Workflow 1 — Jira Sprint Sync FAILED*\\nSprint: ' + ($('Extract Active Sprints').item.json.name ?? 'unknown') + '\\nError: ' + ($json.message ?? JSON.stringify($json)) + '\\nTimestamp: ' + new Date().toISOString() }}"
       }
     }

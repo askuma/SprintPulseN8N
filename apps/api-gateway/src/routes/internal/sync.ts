@@ -81,10 +81,10 @@ internalSyncRouter.post("/github", async (req, res) => {
     avg_review_lag_hours: String(body.avg_review_lag_hours),
     oldest_open_pr_days: String(body.oldest_open_pr_days),
     merge_rate: String(body.merge_rate),
+    pr_list: body.pr_list,
     synced_at: new Date(body.synced_at),
   }).onConflictDoNothing();
 
-  // Keep only the latest 90 days of metrics per workspace
   await db.update(githubMetrics)
     .set({
       prs_merged: body.prs_merged,
@@ -93,6 +93,7 @@ internalSyncRouter.post("/github", async (req, res) => {
       avg_review_lag_hours: String(body.avg_review_lag_hours),
       oldest_open_pr_days: String(body.oldest_open_pr_days),
       merge_rate: String(body.merge_rate),
+      pr_list: body.pr_list,
       synced_at: new Date(body.synced_at),
       updated_at: new Date(),
     })

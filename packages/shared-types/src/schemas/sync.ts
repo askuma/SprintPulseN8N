@@ -36,6 +36,21 @@ export const JiraSprintDataSchema = z.object({
 export type JiraSprintData = z.infer<typeof JiraSprintDataSchema>;
 
 // ---- GitHub Sync ----
+export const GitHubPRSchema = z.object({
+  number: z.number().int(),
+  title: z.string(),
+  state: z.enum(["open", "closed"]),
+  merged_at: z.string().datetime().nullable(),
+  created_at: z.string().datetime(),
+  updated_at: z.string().datetime(),
+  author: z.string().nullable(),
+  labels: z.array(z.string()).default([]),
+  url: z.string().url(),
+  draft: z.boolean().default(false),
+  review_lag_hours: z.number().min(0).nullable(),
+});
+export type GitHubPR = z.infer<typeof GitHubPRSchema>;
+
 export const GitHubPRMetricsSchema = z.object({
   workspace_id: z.string().uuid(),
   repo_full_name: z.string(),
@@ -45,6 +60,7 @@ export const GitHubPRMetricsSchema = z.object({
   avg_review_lag_hours: z.number().min(0),
   oldest_open_pr_days: z.number().min(0),
   merge_rate: z.number().min(0).max(1),
+  pr_list: z.array(GitHubPRSchema).default([]),
   synced_at: z.string().datetime(),
 });
 export type GitHubPRMetrics = z.infer<typeof GitHubPRMetricsSchema>;

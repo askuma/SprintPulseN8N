@@ -1,7 +1,7 @@
 {
   "name": "Workflow 5 — Webhook Handler (Jira + GitHub Real-Time)",
-  "description": "Receives inbound webhooks from Jira and GitHub via the API Gateway. Verifies payload, routes by event type, and posts to /internal/sync/event for near-real-time updates.",
-  "version": "1.0.0",
+  "description": "Receives inbound webhooks from Jira and GitHub. Verifies payload, routes by event type, and posts to /internal/sync/event for near-real-time updates.",
+  "version": "1.1.0",
   "active": true,
   "nodes": [
     {
@@ -15,10 +15,8 @@
         "httpMethod": "POST",
         "path": "jira-events",
         "responseMode": "onReceived",
-        "responseData": "{{ JSON.stringify({received: true}) }}",
-        "authentication": "headerAuth",
-        "authPropertyName": "X-Internal-API-Key",
-        "authPropertyValue": "={{ $env.INTERNAL_API_KEY }}"
+        "responseData": "allEntries",
+        "options": {}
       }
     },
     {
@@ -32,10 +30,8 @@
         "httpMethod": "POST",
         "path": "github-events",
         "responseMode": "onReceived",
-        "responseData": "{{ JSON.stringify({received: true}) }}",
-        "authentication": "headerAuth",
-        "authPropertyName": "X-Internal-API-Key",
-        "authPropertyValue": "={{ $env.INTERNAL_API_KEY }}"
+        "responseData": "allEntries",
+        "options": {}
       }
     },
     {
@@ -46,7 +42,7 @@
       "position": [480, 200],
       "parameters": {
         "mode": "expression",
-        "output": "={{ ['jira:issue_updated', 'sprint_started', 'sprint_completed'].includes($json.webhookEvent) ? 0 : 1 }}",
+        "output": "={{ ['jira:issue_updated', 'jira:issue_created', 'sprint_started', 'sprint_completed'].includes($json.body.webhookEvent) ? 0 : 1 }}",
         "options": {}
       }
     },
@@ -58,7 +54,7 @@
       "position": [720, 120],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const payload = $json;\nconst issue = payload.issue || {};\n\nfunction normaliseStatus(statusCategory) {\n  const key = statusCategory?.key || '';\n  if (key === 'new') return 'todo';\n  if (key === 'indeterminate') return 'in_progress';\n  if (key === 'done' || key === 'complete') return 'done';\n  return 'in_progress';\n}\n\nreturn {\n  workspace_id: $env.DEFAULT_WORKSPACE_ID || payload.workspaceId,\n  source: 'jira',\n  event_type: payload.webhookEvent,\n  payload: {\n    issue: {\n      id: issue.id,\n      key: issue.key,\n      summary: issue.fields?.summary,\n      status: normaliseStatus(issue.fields?.status?.statusCategory),\n      updated_at: issue.fields?.updated\n    }\n  },\n  received_at: new Date().toISOString()\n};"
+        "jsCode": "const payload = $json.body;\nconst issue = payload.issue || {};\n\nfunction normaliseStatus(statusCategory) {\n  const key = statusCategory?.key || '';\n  if (key === 'new') return 'todo';\n  if (key === 'indeterminate') return 'in_progress';\n  if (key === 'done' || key === 'complete') return 'done';\n  return 'in_progress';\n}\n\nreturn {\n  workspace_id: $env.DEFAULT_WORKSPACE_ID,\n  source: 'jira',\n  event_type: payload.webhookEvent,\n  payload: {\n    issue: {\n      id: String(issue.id ?? ''),\n      key: issue.key ?? '',\n      summary: issue.fields?.summary ?? '',\n      status: normaliseStatus(issue.fields?.status?.statusCategory),\n      updated_at: issue.fields?.updated ? new Date(issue.fields.updated).toISOString() : new Date().toISOString()\n    }\n  },\n  received_at: new Date().toISOString()\n};"
       }
     },
     {
@@ -69,12 +65,12 @@
       "position": [480, 420],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const payload = $json;\nconst pr = payload.pull_request || {};\n\nreturn {\n  workspace_id: $env.DEFAULT_WORKSPACE_ID || payload.workspaceId,\n  source: 'github',\n  event_type: payload.action ? `pull_request.${payload.action}` : 'pull_request',\n  payload: {\n    number: pr.number,\n    title: pr.title,\n    state: pr.state,\n    merged: pr.merged,\n    merged_at: pr.merged_at,\n    created_at: pr.created_at,\n    updated_at: pr.updated_at\n  },\n  received_at: new Date().toISOString()\n};"
+        "jsCode": "const payload = $json.body;\nconst pr = payload.pull_request || {};\n\nreturn {\n  workspace_id: $env.DEFAULT_WORKSPACE_ID,\n  source: 'github',\n  event_type: payload.action ? `pull_request.${payload.action}` : 'pull_request',\n  payload: {\n    number: pr.number,\n    title: pr.title,\n    state: pr.state,\n    merged: pr.merged ?? false,\n    merged_at: pr.merged_at ? new Date(pr.merged_at).toISOString() : null,\n    created_at: pr.created_at ? new Date(pr.created_at).toISOString() : new Date().toISOString(),\n    updated_at: pr.updated_at ? new Date(pr.updated_at).toISOString() : new Date().toISOString()\n  },\n  received_at: new Date().toISOString()\n};"
       }
     },
     {
       "id": "node-post-event",
-      "name": "POST to /internal/sync/event",
+      "name": "POST to Gateway",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [960, 300],
@@ -84,13 +80,13 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "X-Internal-API-Key", "value": "={{ $env.INTERNAL_API_KEY }}" },
-            { "name": "Content-Type", "value": "application/json" }
+            { "name": "X-Internal-API-Key", "value": "={{ $env.INTERNAL_API_KEY }}" }
           ]
         },
         "sendBody": true,
         "contentType": "json",
-        "body": "={{ $json }}",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
         "options": { "timeout": 10000 }
       }
     },
@@ -114,28 +110,41 @@
       "parameters": {
         "resource": "message",
         "operation": "post",
-        "channel": "#ops-alerts",
-        "text": "🚨 *Workflow 5 — Webhook Handler FAILED*\nSource: {{ $json.source }}\nError: {{ $json.message }}\nTimestamp: {{ new Date().toISOString() }}"
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $env.SLACK_OPS_CHANNEL_ID }}",
+          "mode": "id"
+        },
+        "text": "={{ '🚨 *Workflow 5 — Webhook Handler FAILED*\\nError: ' + ($json.message ?? JSON.stringify($json)) + '\\nTimestamp: ' + new Date().toISOString() }}"
       }
     }
   ],
   "connections": {
-    "Jira Webhook": { "main": [[{ "node": "Route Jira Event", "type": "main", "index": 0 }]] },
-    "GitHub Webhook": { "main": [[{ "node": "Normalise GitHub Event", "type": "main", "index": 0 }]] },
+    "Jira Webhook": {
+      "main": [[{ "node": "Route Jira Event", "type": "main", "index": 0 }]]
+    },
+    "GitHub Webhook": {
+      "main": [[{ "node": "Normalise GitHub Event", "type": "main", "index": 0 }]]
+    },
     "Route Jira Event": {
       "main": [
         [{ "node": "Normalise Jira Event", "type": "main", "index": 0 }],
         [{ "node": "Skip Unknown Jira Event", "type": "main", "index": 0 }]
       ]
     },
-    "Normalise Jira Event": { "main": [[{ "node": "POST to /internal/sync/event", "type": "main", "index": 0 }]] },
-    "Normalise GitHub Event": { "main": [[{ "node": "POST to /internal/sync/event", "type": "main", "index": 0 }]] },
-    "POST to /internal/sync/event": {
+    "Normalise Jira Event": {
+      "main": [[{ "node": "POST to Gateway", "type": "main", "index": 0 }]]
+    },
+    "Normalise GitHub Event": {
+      "main": [[{ "node": "POST to Gateway", "type": "main", "index": 0 }]]
+    },
+    "POST to Gateway": {
+      "main": [[]],
       "error": [[{ "node": "Alert on Error", "type": "main", "index": 0 }]]
     }
   },
   "settings": {
-    "executionOrder": "v1",
-    "errorWorkflow": "Workflow Error Handler"
+    "executionOrder": "v1"
   }
 }

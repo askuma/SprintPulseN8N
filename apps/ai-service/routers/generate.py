@@ -3,8 +3,8 @@ import os
 import asyncpg
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, BackgroundTasks
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-import anthropic
+from tenacity import retry, stop_after_attempt, wait_exponential
+from mistralai import Mistral
 import structlog
 
 from models.report import GenerateReportRequest, ReportOutput
@@ -15,23 +15,24 @@ from services.context_builder import build_context
 router = APIRouter()
 log = structlog.get_logger()
 
-anthropic_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+mistral_client = Mistral(api_key=os.environ.get("MISTRAL_API_KEY", ""))
 
 
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=8),
-    retry=retry_if_exception_type((anthropic.RateLimitError, anthropic.APITimeoutError)),
 )
-def call_claude(system_prompt: str, user_message: str, model: str) -> str:
-    message = anthropic_client.messages.create(
+def call_mistral(system_prompt: str, user_message: str, model: str) -> str:
+    response = mistral_client.chat.complete(
         model=model,
-        max_tokens=2048,
         temperature=0.3,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_message}],
+        max_tokens=2048,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ],
     )
-    return message.content[0].text
+    return response.choices[0].message.content
 
 
 async def update_report_in_db(report_id: str, status: str, content: dict | None = None, error: str | None = None):
@@ -71,9 +72,9 @@ async def generate_report_task(req: GenerateReportRequest):
 
         system_prompt = get_system_prompt(req.template, req.prompt_version)
         user_message = build_user_message(context)
-        model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+        model = os.environ.get("MISTRAL_MODEL", "mistral-large-latest")
 
-        raw_output = call_claude(system_prompt, user_message, model)
+        raw_output = call_mistral(system_prompt, user_message, model)
 
         output, hallucinations, pii_violations = validate_output(raw_output, context, req.prompt_version)
 

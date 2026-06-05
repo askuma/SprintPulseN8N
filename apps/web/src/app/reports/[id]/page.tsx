@@ -2,10 +2,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { reportsApi } from "@/lib/api";
 import { formatDistanceToNow } from "date-fns";
-import { use } from "react";
 
-export default function ReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function ReportDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params;
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["report", id],

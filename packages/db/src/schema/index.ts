@@ -111,6 +111,7 @@ export const githubMetrics = pgTable("github_metrics", {
   avg_review_lag_hours: numeric("avg_review_lag_hours", { precision: 10, scale: 2 }).notNull().default("0"),
   oldest_open_pr_days: numeric("oldest_open_pr_days", { precision: 10, scale: 2 }).notNull().default("0"),
   merge_rate: numeric("merge_rate", { precision: 5, scale: 4 }).notNull().default("0"),
+  pr_list: jsonb("pr_list").$type<unknown[]>().default([]).notNull(),
   synced_at: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

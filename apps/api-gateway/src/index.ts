@@ -13,6 +13,7 @@ import { integrationsRouter } from "./routes/integrations";
 import { webhooksRouter } from "./routes/webhooks";
 import { internalSyncRouter } from "./routes/internal/sync";
 import { internalWorkspacesRouter } from "./routes/internal/workspaces";
+import { internalReportsRouter } from "./routes/internal/reports";
 import { errorHandler } from "./middleware/error-handler";
 import { requestIdMiddleware } from "./middleware/request-id";
 
@@ -56,6 +57,7 @@ app.use("/webhooks", webhooksRouter);
 // --- Internal Routes (API-key protected, n8n calls these) ---
 app.use("/internal/sync", internalSyncRouter);
 app.use("/internal/workspaces", internalWorkspacesRouter);
+app.use("/internal/reports", internalReportsRouter);
 
 // --- Root info ---
 app.get("/", (_req, res) => {

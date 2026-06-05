@@ -59,7 +59,11 @@ services:
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       # Expose app credentials to n8n workflows
       - GATEWAY_INTERNAL_URL=http://host.docker.internal:3001
+      - AI_SERVICE_INTERNAL_URL=http://host.docker.internal:8000
       - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+      - SLACK_CHANNEL_ID=${SLACK_CHANNEL_ID}
+      - SLACK_OPS_CHANNEL_ID=${SLACK_OPS_CHANNEL_ID}
+      - DEFAULT_WORKSPACE_ID=${DEFAULT_WORKSPACE_ID}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

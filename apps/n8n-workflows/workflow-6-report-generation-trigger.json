@@ -1,7 +1,7 @@
 {
   "name": "Workflow 6 — Report Generation Trigger",
-  "description": "Weekly cron (Friday 08:00 workspace TZ) and manual HTTP trigger. Fetches active workspaces, triggers report generation for each, polls for completion, and DMs the SM on Slack.",
-  "version": "1.0.0",
+  "description": "Weekly cron (Friday 08:00) and manual trigger. Creates a report record, triggers AI generation, polls for completion, and notifies on Slack.",
+  "version": "2.0.0",
   "active": true,
   "nodes": [
     {
@@ -12,12 +12,7 @@
       "position": [240, 200],
       "parameters": {
         "rule": {
-          "interval": [
-            {
-              "field": "cronExpression",
-              "expression": "0 8 * * 5"
-            }
-          ]
+          "interval": [{ "field": "cronExpression", "expression": "0 8 * * 5" }]
         }
       }
     },
@@ -32,10 +27,8 @@
         "httpMethod": "POST",
         "path": "trigger-reports",
         "responseMode": "onReceived",
-        "responseData": "{{ JSON.stringify({triggered: true}) }}",
-        "authentication": "headerAuth",
-        "authPropertyName": "X-Internal-API-Key",
-        "authPropertyValue": "={{ $env.INTERNAL_API_KEY }}"
+        "responseData": "allEntries",
+        "options": {}
       }
     },
     {
@@ -50,51 +43,71 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [{ "name": "X-Internal-API-Key", "value": "={{ $env.INTERNAL_API_KEY }}" }]
-        }
+        },
+        "options": { "timeout": 10000 }
       }
     },
     {
       "id": "node-split",
-      "name": "Split By Workspace",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
+      "name": "Extract Workspaces",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
       "position": [700, 300],
       "parameters": {
-        "batchSize": 1,
-        "options": {}
+        "fieldToSplitOut": "data",
+        "include": "noOtherFields"
       }
     },
     {
-      "id": "node-trigger-gen",
-      "name": "Trigger Report Generation",
+      "id": "node-create-report",
+      "name": "Create Report Record",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [920, 300],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.GATEWAY_URL }}/v1/reports/generate",
+        "url": "={{ $env.GATEWAY_INTERNAL_URL }}/internal/reports/create",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [
-            { "name": "Authorization", "value": "Bearer {{ $env.SERVICE_ACCOUNT_JWT }}" },
-            { "name": "Content-Type", "value": "application/json" }
-          ]
+          "parameters": [{ "name": "X-Internal-API-Key", "value": "={{ $env.INTERNAL_API_KEY }}" }]
         },
         "sendBody": true,
         "contentType": "json",
-        "body": "={{ JSON.stringify({workspace_id: $json.id, sprint_id: $json.active_sprint_id, template: 'standard'}) }}"
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ workspace_id: $json.id, template: 'standard' }) }}",
+        "options": { "timeout": 10000 }
+      }
+    },
+    {
+      "id": "node-trigger-gen",
+      "name": "Trigger AI Generation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1140, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AI_SERVICE_INTERNAL_URL }}/generate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ report_id: $json.report_id, workspace_id: $json.workspace_id, sprint_id: $json.sprint_id, template: 'standard', prompt_version: 'v1.0' }) }}",
+        "options": { "timeout": 15000 }
       }
     },
     {
       "id": "node-wait",
-      "name": "Wait 120s for Generation",
+      "name": "Wait 90s for Generation",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [1140, 300],
+      "position": [1360, 300],
       "parameters": {
         "resume": "timeInterval",
         "unit": "seconds",
-        "amount": 120
+        "amount": 90
       }
     },
     {
@@ -102,16 +115,15 @@
       "name": "Poll Report Status",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1360, 300],
+      "position": [1580, 300],
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.GATEWAY_URL }}/v1/reports/{{ $('Trigger Report Generation').item.json.data.report_id }}",
+        "url": "={{ $env.GATEWAY_INTERNAL_URL }}/internal/reports/{{ $('Create Report Record').item.json.report_id }}/status",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [
-            { "name": "Authorization", "value": "Bearer {{ $env.SERVICE_ACCOUNT_JWT }}" }
-          ]
-        }
+          "parameters": [{ "name": "X-Internal-API-Key", "value": "={{ $env.INTERNAL_API_KEY }}" }]
+        },
+        "options": { "timeout": 10000 }
       }
     },
     {
@@ -119,72 +131,93 @@
       "name": "Generation Complete?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1580, 300],
+      "position": [1800, 300],
       "parameters": {
         "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
           "conditions": [
-            {
-              "leftValue": "={{ $json.data.status }}",
-              "rightValue": "draft",
-              "operator": { "type": "string", "operation": "equals" }
-            }
-          ]
+            { "leftValue": "={{ $json.status }}", "rightValue": "draft", "operator": { "type": "string", "operation": "equals" } }
+          ],
+          "combinator": "and"
         }
       }
     },
     {
-      "id": "node-notify-sm",
-      "name": "Notify SM via Slack DM",
+      "id": "node-notify-slack",
+      "name": "Notify Report Ready",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.2,
-      "position": [1800, 200],
-      "credentials": {
-        "slackApi": { "name": "Slack Bot — SprintPulse" }
-      },
-      "parameters": {
-        "resource": "message",
-        "operation": "post",
-        "channel": "={{ $('Split By Workspace').item.json.sm_slack_user_id }}",
-        "text": "👋 Your *{{ $('Poll Report Status').item.json.data.sprint_name }}* report is ready for review!\n\nPlease review and approve it here: {{ $env.APP_URL }}/reports/{{ $('Trigger Report Generation').item.json.data.report_id }}\n\n_This report was auto-generated by SprintPulse. Review it takes ~5 minutes._"
-      }
-    },
-    {
-      "id": "node-retry-or-alert",
-      "name": "Alert — Generation Failed/Pending",
-      "type": "n8n-nodes-base.slack",
-      "typeVersion": 2.2,
-      "position": [1800, 420],
+      "position": [2020, 180],
       "credentials": {
         "slackApi": { "name": "Slack Bot — SprintPulse Ops" }
       },
       "parameters": {
         "resource": "message",
         "operation": "post",
-        "channel": "#ops-alerts",
-        "text": "⚠️ *Report generation still pending or failed after 2min*\nReport ID: {{ $('Trigger Report Generation').item.json.data.report_id }}\nWorkspace: {{ $('Split By Workspace').item.json.id }}\nStatus: {{ $json.data.status }}\nError: {{ $json.data.error_message || 'none' }}"
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $env.SLACK_CHANNEL_ID }}",
+          "mode": "id"
+        },
+        "text": "={{ '✅ *Sprint Report Ready!*\\n*' + $('Create Report Record').item.json.sprint_name + '*\\nReport ID: `' + $('Create Report Record').item.json.report_id + '`\\nGenerated at: ' + ($json.generated_at ?? new Date().toISOString()) + '\\n\\nReview it in the SprintPulse dashboard.' }}"
+      }
+    },
+    {
+      "id": "node-alert-failed",
+      "name": "Alert — Generation Failed",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [2020, 440],
+      "credentials": {
+        "slackApi": { "name": "Slack Bot — SprintPulse Ops" }
+      },
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $env.SLACK_OPS_CHANNEL_ID }}",
+          "mode": "id"
+        },
+        "text": "={{ '⚠️ *Report generation failed or still pending*\\nReport ID: `' + $('Create Report Record').item.json.report_id + '`\\nSprint: ' + $('Create Report Record').item.json.sprint_name + '\\nStatus: ' + $json.status + '\\nError: ' + ($json.error_message ?? 'none') }}"
       }
     }
   ],
   "connections": {
-    "Weekly Schedule": { "main": [[{ "node": "Get Active Workspaces", "type": "main", "index": 0 }]] },
-    "Manual Webhook Trigger": { "main": [[{ "node": "Get Active Workspaces", "type": "main", "index": 0 }]] },
-    "Get Active Workspaces": { "main": [[{ "node": "Split By Workspace", "type": "main", "index": 0 }]] },
-    "Split By Workspace": { "main": [[{ "node": "Trigger Report Generation", "type": "main", "index": 0 }]] },
-    "Trigger Report Generation": { "main": [[{ "node": "Wait 120s for Generation", "type": "main", "index": 0 }]] },
-    "Wait 120s for Generation": { "main": [[{ "node": "Poll Report Status", "type": "main", "index": 0 }]] },
-    "Poll Report Status": { "main": [[{ "node": "Generation Complete?", "type": "main", "index": 0 }]] },
+    "Weekly Schedule": {
+      "main": [[{ "node": "Get Active Workspaces", "type": "main", "index": 0 }]]
+    },
+    "Manual Webhook Trigger": {
+      "main": [[{ "node": "Get Active Workspaces", "type": "main", "index": 0 }]]
+    },
+    "Get Active Workspaces": {
+      "main": [[{ "node": "Extract Workspaces", "type": "main", "index": 0 }]]
+    },
+    "Extract Workspaces": {
+      "main": [[{ "node": "Create Report Record", "type": "main", "index": 0 }]]
+    },
+    "Create Report Record": {
+      "main": [[{ "node": "Trigger AI Generation", "type": "main", "index": 0 }]]
+    },
+    "Trigger AI Generation": {
+      "main": [[{ "node": "Wait 90s for Generation", "type": "main", "index": 0 }]]
+    },
+    "Wait 90s for Generation": {
+      "main": [[{ "node": "Poll Report Status", "type": "main", "index": 0 }]]
+    },
+    "Poll Report Status": {
+      "main": [[{ "node": "Generation Complete?", "type": "main", "index": 0 }]]
+    },
     "Generation Complete?": {
       "main": [
-        [{ "node": "Notify SM via Slack DM", "type": "main", "index": 0 }],
-        [{ "node": "Alert — Generation Failed/Pending", "type": "main", "index": 0 }]
+        [{ "node": "Notify Report Ready", "type": "main", "index": 0 }],
+        [{ "node": "Alert — Generation Failed", "type": "main", "index": 0 }]
       ]
-    },
-    "Notify SM via Slack DM": {
-      "main": [[{ "node": "Split By Workspace", "type": "main", "index": 0 }]]
     }
   },
   "settings": {
-    "executionOrder": "v1",
-    "errorWorkflow": "Workflow Error Handler"
+    "executionOrder": "v1"
   }
 }

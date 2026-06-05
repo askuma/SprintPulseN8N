@@ -73,8 +73,37 @@ def check_pii(output: ReportOutput) -> list[str]:
     return violations
 
 
+def extract_json_from_response(raw: str) -> dict:
+    if not raw or not raw.strip():
+        raise ValueError("Empty response from AI model")
+
+    # Try direct parse first
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+
+    # Strip markdown code fence (```json...``` or ```...```)
+    stripped = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.IGNORECASE)
+    stripped = re.sub(r"\s*```$", "", stripped)
+    try:
+        return json.loads(stripped)
+    except json.JSONDecodeError:
+        pass
+
+    # Find the first {...} block in the text
+    match = re.search(r"\{.*\}", raw, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except json.JSONDecodeError:
+            pass
+
+    raise ValueError(f"Could not extract JSON from model response. First 300 chars: {raw[:300]!r}")
+
+
 def validate_output(raw_json: str, context: ReportContext, prompt_version: str) -> tuple[ReportOutput, list[str], list[str]]:
-    parsed = json.loads(raw_json)
+    parsed = extract_json_from_response(raw_json)
     parsed["prompt_version"] = prompt_version
 
     # Truncate to budgets
