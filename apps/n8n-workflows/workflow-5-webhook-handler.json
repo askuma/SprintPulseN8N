@@ -18,7 +18,7 @@
         "responseData": "{{ JSON.stringify({received: true}) }}",
         "authentication": "headerAuth",
         "authPropertyName": "X-Internal-API-Key",
-        "authPropertyValue": "={{ $vars.INTERNAL_API_KEY }}"
+        "authPropertyValue": "={{ $env.INTERNAL_API_KEY }}"
       }
     },
     {
@@ -35,7 +35,7 @@
         "responseData": "{{ JSON.stringify({received: true}) }}",
         "authentication": "headerAuth",
         "authPropertyName": "X-Internal-API-Key",
-        "authPropertyValue": "={{ $vars.INTERNAL_API_KEY }}"
+        "authPropertyValue": "={{ $env.INTERNAL_API_KEY }}"
       }
     },
     {
@@ -80,11 +80,11 @@
       "position": [960, 300],
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.GATEWAY_INTERNAL_URL }}/internal/sync/event",
+        "url": "={{ $env.GATEWAY_INTERNAL_URL }}/internal/sync/event",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "X-Internal-API-Key", "value": "={{ $vars.INTERNAL_API_KEY }}" },
+            { "name": "X-Internal-API-Key", "value": "={{ $env.INTERNAL_API_KEY }}" },
             { "name": "Content-Type", "value": "application/json" }
           ]
         },
