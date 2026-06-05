@@ -1,6 +1,6 @@
 # SprintPulse API Documentation
 
-**Architecture: Track B — n8n Integration Layer**
+**Architecture: n8n Integration Layer**
 **Version:** 1.0.0
 **Base URL (production):** `https://api.sprintpulse.io/v1`
 **Base URL (staging):** `https://api-staging.sprintpulse.io/v1`

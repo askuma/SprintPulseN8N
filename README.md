@@ -1,4 +1,4 @@
-# SprintPulse — Architecture B (n8n Integration Layer)
+# SprintPulse — n8n Integration Layer
 
 AI-powered weekly sprint report automation for engineering teams. This implementation uses **Track B** — n8n as the integration layer instead of a custom connector service.
 
